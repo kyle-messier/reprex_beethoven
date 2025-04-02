@@ -33,12 +33,20 @@ tar_script({
       }),
       tar_target(subsample,
         {
-        rsample::vfold_cv(mtcars, v = 10)
+        bsamples <- rsample::mc_cv(mtcars, prop = 1/3, times = 20)
+        b_train <- lapply(1:nrow(bsamples), function(i){
+          rsample::training(bsamples$splits[[i]])})
+        b_test <- lapply(1:nrow(bsamples), function(i){
+          rsample::assessment(bsamples$splits[[i]])})          
+        b_cv <- lapply(1:length(b_train), \(x) rsample::vfold_cv(b_train[[x]], v = 5))
+       res <- lapply(1:20, \(x) {
+        list(b_cv[[x]], b_train[[x]], b_test[[x]])
+        })
         },
       iteration = "list"),
       tar_target(tune_fit, {
         tune_workflow <- workflow |>
-          tune::tune_grid(resamples = subsample, metrics = yardstick::metric_set(yardstick::rmse),
+          tune::tune_grid(resamples = subsample[[1]], metrics = yardstick::metric_set(yardstick::rmse),
                           grid = 10,
                           control =  tune::control_grid(
                             verbose = TRUE,
@@ -49,11 +57,12 @@ tar_script({
           tune::select_best(metric = "rmse")
 
          final_wf <-  tune::finalize_workflow(workflow, best_workflow) 
-         final_fit <- fit(final_wf, data = mtcars) |> butcher::butcher()
+         final_fit <- fit(final_wf, data = subsample[[2]]) |> butcher::butcher()
         results <- list("workflow" = final_fit, "metrics" = tune::collect_metrics(tune_workflow))
 
 
      },
+     pattern = map(subsample),
      iteration = "list")
     )
   })
