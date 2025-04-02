@@ -63,9 +63,19 @@ tar_script({
 
      },
      pattern = map(subsample),
+     iteration = "list"),
+     tar_target(oos_predict, 
+     command = {
+        pred <- predict(tune_fit[[1]], new_data = subsample[[3]]) |>
+          dplyr::bind_cols(subsample[[3]]) |>
+          dplyr::select(.pred, mpg) |>
+          dplyr::mutate(.pred = round(.pred, 2), mpg = round(mpg, 2))
+     },
+     pattern = map(subsample, tune_fit),
      iteration = "list")
     )
   })
   tar_make()
   res <- targets::tar_read(tune_fit)
+  pred <- targets::tar_read(oos_predict)
 })
